@@ -23,6 +23,8 @@ const Home = () => {
   const [order, setOrder] = useState("desc");
   const [favourite, setFavourite] = useState(false);
   const [selectedNote, setSelectedNote] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const limitPerPage = 8; // Your pagination limit
 
   const userInfo = JSON.parse(localStorage.getItem("userInfo"));
   const token = userInfo?.token;
@@ -32,7 +34,16 @@ const Home = () => {
   }
 
   const handleCreateNote = (note) => {
-    setNotes((prevNotes) => [...prevNotes, note]);
+    setNotes((prevNotes) => {
+      const updatedNotes = [note, ...prevNotes];
+  
+      // Ensure pagination logic respects the limit
+      if (updatedNotes.length > currentPage * limitPerPage) {
+        return updatedNotes.slice(0, currentPage * limitPerPage);
+      }
+  
+      return updatedNotes;
+    });
   };
 
   const fetchNotes = async () => {
@@ -72,7 +83,7 @@ const Home = () => {
     }, 300); // Debounce for better performance
 
     return () => clearTimeout(delayDebounce);
-  }, [page, search, sort, order, favourite]);
+  }, [page, search, sort, order, favourite, currentPage]);
 
   return (
     <div className="flex h-screen overflow-y-hidden max-w-screen-2xl m-4 gap-6">
@@ -171,18 +182,18 @@ const Home = () => {
             ) : notes.length === 0 ? (
               <p className="mt-6 text-gray-500">No notes found.</p>
             ) : (
-              notes.map((note) =>(
-                <div key={note._id} onClick={() => setSelectedNote(note)} >
-                    <Card key={note._id} note={note} />
+              notes.map((note) => (
+                <div key={note._id} onClick={() => setSelectedNote(note)}   >
+                  <Card key={note._id} note={note} />
                 </div>
-                
-              ) )
+
+              ))
             )}
           </div>
 
           {/* Note Modal */}
           <NoteModal note={selectedNote} onClose={() => setSelectedNote(null)} updateNoteState={updateNoteState} />
-  
+
 
           {/* Pagination */}
           <div className="flex justify-center items-center gap-4 mt-6 mb-24">
@@ -203,7 +214,7 @@ const Home = () => {
             >
               Next
             </button>
-          </div> 
+          </div>
         </div>
 
         <div className="fixed bottom-5 z-50 w-[60%] rounded-3xl">
@@ -211,7 +222,7 @@ const Home = () => {
         </div>
       </div>
 
-      
+
     </div>
   );
 };

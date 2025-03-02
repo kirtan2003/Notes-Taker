@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createNote, getAllNotes, updateNote, deleteNote, getNoteById, toggleFavourite, deleteImage } from '../controllers/noteController.js';
+import { createNote, getAllNotes, updateNote, deleteNote, getNoteById, toggleFavourite, deleteImage, addImage } from '../controllers/noteController.js';
 import { upload } from '../middlewares/multerMiddleware.js';
 import { verifyJWT } from "../middlewares/authMiddleware.js";
 
@@ -21,9 +21,10 @@ router.get('/:noteId', getNoteById);
 // Update a note by ID
 router.patch(
     '/:noteId',
-    upload.single('attachments'), 
+     
     updateNote
 );
+router.post("/:noteId",upload.single('attachments'), addImage);
 
 router.route("/:noteId/attachment").delete(deleteImage)
 

@@ -7,9 +7,9 @@ import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs'
 
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME ,
-    api_key: process.env.CLOUDINARY_API_KEY ,
-    api_secret: process.env.CLOUDINARY_API_SECRET ,
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dwy1w6pox',
+    api_key: process.env.CLOUDINARY_API_KEY || '647912169637117',
+    api_secret: process.env.CLOUDINARY_API_SECRET || 'U0wJdgf-8IwoCIpV_6Oykp-hdt8',
 });
 
 const getAllNotes = asyncHandler(async (req, res) => {
@@ -155,57 +155,104 @@ const deleteNote = asyncHandler(async (req, res) => {
     return res.status(200).json(
         new ApiResponse(200, null, "Video deleted successfully")
     )
+});
+
+const addImage = asyncHandler(async (req, res) => {
+    const { noteId } = req.params;
+
+    console.log("Received File:", req.file); // Debugging log
+
+    if (!req.file) {
+        throw new ApiError(400, "No file received.");
+    }
+
+    try {
+        console.log("Uploading to Cloudinary:", req.file.path);
+
+        const uploadedFile = await cloudinary.uploader.upload(req.file.path, {
+            resource_type: "image"
+        });
+
+        console.log("Cloudinary Response:", uploadedFile);
+
+        if (!uploadedFile || !uploadedFile.secure_url) {
+            throw new ApiError(500, "Failed to upload image to Cloudinary.");
+        }
+
+        fs.unlinkSync(req.file.path); // Delete local file after uploading
+
+        const note = await Note.findByIdAndUpdate(
+            noteId,
+            { $push: { attachments: uploadedFile.secure_url } },
+            { new: true }
+        );
+
+        if (!note) {
+            throw new ApiError(404, "Note not found.");
+        }
+
+        return res.status(200).json(new ApiResponse(200, note, "Attachment added successfully"));
+    } catch (error) {
+        console.error("Cloudinary Upload Error:", error); // Log the error
+        throw new ApiError(500, "Error during file upload.");
+    }
 })
 
 const updateNote = asyncHandler(async (req, res) => {
     const { noteId } = req.params;
     const { title, content } = req.body;
-    const attachments = req?.file?.path;
 
-    if (!title && !content && !attachments) {
+    if (!title && !content) {
         throw new ApiError(400, "Please provide either title or content")
     }
 
-    let attachmentUrl;
-    if (req.file) {
-        try {
-            const uploadedFile = await cloudinary.uploader.upload(attachments, {
-                resource_type: "image"
-            });
-
-            if (!uploadedFile || !uploadedFile.secure_url) {
-                throw new ApiError(500, "Failed to upload image to Cloudinary.");
-            }
-
-            attachmentUrl = uploadedFile.secure_url;
-            fs.unlinkSync(attachments); // Delete the local file after uploading
-        } catch (error) {
-            throw new ApiError(500, "Error during file upload.");
-        }
-    }
+    const updatedFields = {};
+    if (title) updatedFields.title = title;
+    if (content) updatedFields.content = content;
 
     const note = await Note.findByIdAndUpdate(
         noteId,
-        {
-            $set: {
-                title,
-                content,
-            },
-            $push: {
-                attachments: attachmentUrl
-            }
-        },
+        { $set: updatedFields },
         { new: true }
     )
+    if (!note) {
+        throw new ApiError(404, "Note not found.");
+    }
 
     return res.status(200).json(
         new ApiResponse(200, note, "Note details updated successfully")
     )
-
 })
 
-const deleteImage = asyncHandler(async(req, res)=> {
-    
+const deleteImage = asyncHandler(async (req, res) => {
+    const { noteId } = req.params;
+    const { attachmentUrl } = req.body;
+
+    if (!attachmentUrl) {
+        throw new ApiError(400, "Attachment URL is required.");
+    }
+
+    try {
+        // Delete from Cloudinary
+        const publicId = attachmentUrl.split('/').pop().split('.')[0]; // Extract public_id from URL
+        await cloudinary.uploader.destroy(publicId);
+
+        // Remove the attachment URL from the note in the database
+        const note = await Note.findByIdAndUpdate(
+            noteId,
+            { $pull: { attachments: attachmentUrl } },
+            { new: true }
+        );
+
+        if (!note) {
+            throw new ApiError(404, "Note not found.");
+        }
+
+        return res.status(200).json(new ApiResponse(200, note, "Attachment deleted successfully"));
+    } catch (error) {
+        console.error("Error deleting image:", error);
+        throw new ApiError(500, "Error deleting image.");
+    }
 })
 
 const toggleFavourite = asyncHandler(async (req, res) => {
@@ -229,6 +276,7 @@ export {
     createNote,
     deleteNote,
     updateNote,
+    addImage,
     getNoteById,
     toggleFavourite,
     deleteImage
